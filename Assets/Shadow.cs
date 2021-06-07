@@ -6,6 +6,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Linq;
 using UnityEngine.Networking;
+using System.Text.RegularExpressions;
 
 public class Shadow : MonoBehaviour {
     public MeshRenderer BurntBackground;
@@ -187,6 +188,77 @@ public class Shadow : MonoBehaviour {
         {
             UpdateFlames();
         }
+    }
+    #endregion
+
+    #region Twitch Plays
+    #pragma warning disable 414
+    private readonly string TwitchHelpMessage = @"!{0} fan (#) [Fans the flames (optionally when last digit of the bomb's timer is '#')]";
+    #pragma warning restore 414
+    IEnumerator ProcessTwitchCommand(string command)
+    {
+        string[] parameters = command.Split(' ');
+        if (Regex.IsMatch(parameters[0], @"^\s*fan\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            yield return null;
+            if (parameters.Length == 1)
+            {
+                Button.OnInteract();
+            }
+            else if (parameters.Length == 2)
+            {
+                int temp = -1;
+                if (int.TryParse(parameters[1], out temp))
+                {
+                    if (temp > -1 && temp < 10)
+                    {
+                        while ((int)Info.GetTime() % 10 != temp)
+                            yield return "trycancel Halted waiting to fan the flames due to a cancel request!";
+                        Button.OnInteract();
+                    }
+                    else
+                    {
+                        yield return "sendtochaterror The specified digit '" + parameters[1] + "' is out of range 0-9!";
+                    }
+                }
+                else
+                {
+                    yield return "sendtochaterror!f The specified digit '" + parameters[1] + "' is invalid!";
+                }
+            }
+            yield break;
+        }
+    }
+
+    IEnumerator TwitchHandleForcedSolve()
+    {
+        while (Button.OnInteract == null) yield return true;
+        if (!hasPressed)
+        {
+            Button.OnInteract();
+            yield return new WaitForSeconds(0.1f);
+        }
+
+        int sol = 1;
+
+        int a = ((data.Count - (data.Count % 100)) / 100);
+        int b = (((data.Count % 100) - (data.Count % 10)) / 10);
+        int c = data.Count % 10;
+
+        var query = Info.QueryWidgets("volt", "");
+        if (query.Count != 0)
+            if (float.Parse(JsonConvert.DeserializeObject<VoltData>(query.First()).voltage) > c)
+                b = Math.Min(b + 2, 9);
+
+        for (int i = 0; i < 10 - b; i++)
+        {
+            sol *= Math.Max(c - a, 1);
+            sol = DigitalRoot(sol);
+        }
+
+        while ((int)Info.GetTime() % 10 != sol)
+            yield return true;
+        Button.OnInteract();
     }
     #endregion
 }
